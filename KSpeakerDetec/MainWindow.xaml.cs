@@ -29,7 +29,7 @@ namespace KSpeakerDetec
         //init 3 instances of kinect sensor..
         KinectSensor _kinectNui0;
         KinectSensor _kinectNui1;
-        KinectSensor _kinectNui2;
+       // KinectSensor _kinectNui2;
         Bitmap bm,bmap;
         byte[] pixeldata;
 
@@ -45,6 +45,8 @@ namespace KSpeakerDetec
            // Unloaded += new RoutedEventHandler(MainWindow_Unloaded);
 
         }
+
+        
 
         //del
         /*
@@ -69,7 +71,7 @@ namespace KSpeakerDetec
         {
             try
             {
-                KinectSensor device = new KinectSensor();
+               // KinectSensor device = new KinectSensor();
                 this.DeviceCount = KinectSensor.KinectSensors.Count;
                 this.btn_Detect.Content = string.Format("Kinect Device Detected {0}", this.DeviceCount.ToString());
             }
@@ -104,27 +106,38 @@ namespace KSpeakerDetec
 
         private void InitializeNui()
         {
+
+            try
+            {
+                // KinectSensor device = new KinectSensor();
+                this.DeviceCount = KinectSensor.KinectSensors.Count;
+              //  this.btn_Detect.Content = string.Format("Kinect Device Detected {0}", this.DeviceCount.ToString());
+            }
+            catch (Exception exp)
+            {
+                MessageBox.Show(string.Format("Error Occured in Device Detection: ", exp.Message));
+            }
             try
             {   
                 //check for 3 sensors
-                if(DeviceCount >=3)
+                if(DeviceCount >=2)
                 {
 
                 _kinectNui0 = KinectSensor.KinectSensors[0];
-                _kinectNui1 = KinectSensor.KinectSensors[1];
-                _kinectNui2 = KinectSensor.KinectSensors[2];
+               _kinectNui1 = KinectSensor.KinectSensors[1];
+              // _kinectNui2 = KinectSensor.KinectSensors[2];
 
                 _kinectNui0.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
                 _kinectNui0.ColorFrameReady += new EventHandler<ColorImageFrameReadyEventArgs>(ColorFrameReady0);
                 _kinectNui0.Start();
-
+                
                 _kinectNui1.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
                 _kinectNui1.ColorFrameReady += new EventHandler<ColorImageFrameReadyEventArgs>(ColorFrameReady1);
                 _kinectNui1.Start();
-
-                _kinectNui2.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
-                _kinectNui2.ColorFrameReady += new EventHandler<ColorImageFrameReadyEventArgs>(ColorFrameReady2);
-                _kinectNui2.Start();
+                    
+              ///  _kinectNui2.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
+              ///  _kinectNui2.ColorFrameReady += new EventHandler<ColorImageFrameReadyEventArgs>(ColorFrameReady2);
+             //   _kinectNui2.Start();
 
 
                     /*
@@ -139,19 +152,44 @@ namespace KSpeakerDetec
                 _kinectNui2.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
                 _kinectNui2.DepthFrameReady += new EventHandler<DepthImageFrameReadyEventArgs>(DepthFrameReady);
                 _kinectNui2.Start();*/
-
+                btnStop.IsEnabled = true;
+                btnStart.IsEnabled = false;
                  }
             }//end try block
             catch (InvalidOperationException ex)
             {
                 MessageBox.Show(ex.Message);
             }
-            
+            catch (ArgumentOutOfRangeException e)
+            {
+                btnStop.IsEnabled = false;
+                btnStart.IsEnabled = true;
+                MessageBox.Show("No Kinect detected. Please connect a Kinect Sensor and retry.");
+
+            }
         } 
 
         private void WindowLoaded(object sender, RoutedEventArgs e)
         {
-            InitializeNui();
+           // InitializeNui();
+
+            btnStart.IsEnabled = true;
+            btnStop.IsEnabled = false;
+        }
+
+        private void WindowClosed(object sender, EventArgs e)
+        {
+            try
+            {
+
+                _kinectNui0.Stop();
+                 _kinectNui1.Stop();
+             //    _kinectNui2.Stop();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
         }
 
         void DepthFrameReady(object sender, DepthImageFrameReadyEventArgs e)
@@ -220,8 +258,8 @@ namespace KSpeakerDetec
             {
 
                 _kinectNui0.Stop();
-                _kinectNui1.Stop();
-                _kinectNui2.Stop();
+               _kinectNui1.Stop();
+              // _kinectNui2.Stop();
                 btnStop.IsEnabled = false;
                 btnStart.IsEnabled = true;
             }
@@ -237,6 +275,7 @@ namespace KSpeakerDetec
 
 
             InitializeNui();
+           // MessageBox.Show("start clicked.");
             //btnStop.IsEnabled = true;
             //btnStart.IsEnabled = false;
         }

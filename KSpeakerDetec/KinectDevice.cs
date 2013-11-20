@@ -10,7 +10,7 @@ namespace KSpeakerDetec
     {
         public string DeviceName { get; set; }
 
-        public Runtime KinectRuntime { get; set; }
+//        public Runtime KinectRuntime { get; set; }
 
     }
 }

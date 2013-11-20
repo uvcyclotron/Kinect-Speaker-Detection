@@ -28,7 +28,7 @@
         
         <TextBlock Height="23" HorizontalAlignment="Left" Margin="405,-26,0,109.742" Name="textBlock6" Text="Camera2" VerticalAlignment="Bottom" Width="43" />
         <TextBlock Height="23" HorizontalAlignment="Left" Margin="118,-26,0,109.742" x:Name="textBlock3_Copy" Text="Camera3" VerticalAlignment="Bottom" Grid.Column="2" Width="43" />
-        <Button Content="Detect" Height="23" HorizontalAlignment="Left" Margin="134,-131,0,0" x:Name="btn_Detect" VerticalAlignment="Top" Width="115" Click="BtnStopClick" />
+        <Button Content="Detect" Height="23" HorizontalAlignment="Left" Margin="134,-131,0,0" x:Name="btn_Detect" VerticalAlignment="Top" Width="115" Click="btn_Detect_Click" />
 
     </Grid>
 </Window>
