@@ -24,7 +24,11 @@ namespace Microsoft.Samples.Kinect.AudioBasics
     /// </summary>
     public partial class AudioKinect : Window
     {
-       
+
+        /// <summary>
+        /// The maximum number of Kinect sensors that can be run parallely in the program.
+        /// </summary>
+        private const int MaxKinect = 3;
 
         /// <summary>
         /// Width of bitmap that stores audio stream energy data ready for visualization.
@@ -68,6 +72,11 @@ namespace Microsoft.Samples.Kinect.AudioBasics
         private int firstCheck = 0; //0 for first time, 1 for handler atached, 2 for after that
 
         private int byteArraySize = 0;
+
+        /// <summary>
+        /// The threshold value above which to record as a correct hearing.
+        /// </summary>
+        private const double BackgroundNoiseIntensity = 0.2;
 
         private int[] voiceDetectionArr;
         
@@ -114,15 +123,13 @@ namespace Microsoft.Samples.Kinect.AudioBasics
         {
             // Look through all sensors and start the first connected one.
             // This requires that a Kinect is connected at the time of app startup.
-            // To make your app robust against plug/unplug, 
-            // it is recommended to use KinectSensorChooser provided in Microsoft.Kinect.Toolkit (See components in Toolkit Browser).
             foreach (var potentialSensor in KinectSensor.KinectSensors)
             {
                 if (potentialSensor.Status == KinectStatus.Connected)
                 {
                     audioKinect[deviceCount] = new InitializeKinect(potentialSensor);
                     deviceCount++;
-                    if (deviceCount >= 3)
+                    if (deviceCount >= MaxKinect)
                     {
                         break;
                     }
@@ -132,26 +139,6 @@ namespace Microsoft.Samples.Kinect.AudioBasics
 
 
             }
-
-            //if (null != this.sensor)
-            //{
-            //    try
-            //    {
-            //        // Start the sensor!
-            //        this.sensor.Start();
-            //    }
-            //    catch (IOException)
-            //    {
-            //        // Some other application is streaming from the same Kinect sensor
-            //        this.sensor = null;
-            //    }
-            //}
-
-            //if (null == this.sensor)
-            //{
-            //    this.statusBarText.Text = Properties.Resources.NoKinectReady;
-            //    return;
-            //}
 
             // Initialize foreground pixels
             this.foregroundPixels = new byte[EnergyBitmapHeight];
@@ -164,6 +151,7 @@ namespace Microsoft.Samples.Kinect.AudioBasics
 
             CompositionTarget.Rendering += UpdateEnergy;
 
+            //add AudioSource Handlers and enable ColourStream for the detected Kinect devices
             for (int j = 0; j < deviceCount; j++)
             {
 
@@ -172,15 +160,6 @@ namespace Microsoft.Samples.Kinect.AudioBasics
                 audioKinect[j].sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
 
             }
-
-            //audioKinect[1].sensor.AudioSource.BeamAngleChanged += this.AudioSourceBeamChanged;
-            //audioKinect[1].sensor.AudioSource.SoundSourceAngleChanged += this.AudioSourceSoundSourceAngleChanged;
-            //audioKinect[0].sensor.AudioSource.BeamAngleChanged += this.AudioSourceBeamChanged;
-            //audioKinect[0].sensor.AudioSource.SoundSourceAngleChanged += this.AudioSourceSoundSourceAngleChanged;
-
-            /////start colorstream
-            //audioKinect[0].sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
-            //audioKinect[1].sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
 
             //define byteArraySize
             byteArraySize = this.audioKinect[0].sensor.ColorStream.FramePixelDataLength;
@@ -204,26 +183,11 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             // Tell audio reading thread to stop and wait for it to finish.
             CompositionTarget.Rendering -= UpdateEnergy;
 
-            //audioKinect[0].sensor.AudioSource.BeamAngleChanged -= this.AudioSourceBeamChanged;
-            //audioKinect[0].sensor.AudioSource.SoundSourceAngleChanged -= this.AudioSourceSoundSourceAngleChanged;
-
             for (int j = 0; j < deviceCount; j++)
             {
                 audioKinect[j].sensor.ColorStream.Disable();
                 audioKinect[j].closeKinect();
             }
-
-            //audioKinect[0].sensor.ColorStream.Disable();
-            //audioKinect[1].sensor.ColorStream.Disable();
-            //audioKinect[0].closeKinect();
-            //audioKinect[1].closeKinect();
-
-            //this.reading = false;
-            //if (null != readingThread)
-            //{
-            //    readingThread.Join();
-            //}
-
           
         }
 
@@ -239,8 +203,6 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             beamAngleText.Text = string.Format(CultureInfo.CurrentCulture, Properties.Resources.BeamAngle, e.Angle.ToString("0", CultureInfo.CurrentCulture));
         }
 
-        int count1 = 0;
-        int count2 = 0;
         /// <summary>
         /// Handles event triggered when sound source angle changes.
         /// </summary>
@@ -251,15 +213,17 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             // Maximum possible confidence corresponds to this gradient width
             const double MinGradientWidth = 0.04;
             int maxIntensityDevice = 0;
+            // Find the Kinect sensor which has the highest intensity recording.
             for (int j = 0; j < deviceCount; j++)
             {
                 if (audioKinect[j].energy[audioKinect[j].energyIndex] > audioKinect[maxIntensityDevice].energy[audioKinect[maxIntensityDevice].energyIndex])
                     maxIntensityDevice = j;
             }
 
-            if (audioKinect[maxIntensityDevice].energy[audioKinect[maxIntensityDevice].energyIndex] > 0.2)
+            // Check if it is above the minimum background noise intensity level.
+            if (audioKinect[maxIntensityDevice].energy[audioKinect[maxIntensityDevice].energyIndex] > BackgroundNoiseIntensity)
             {
-                System.Diagnostics.Debug.Print("Highest intensity on device#: " + audioKinect[0].sensor.UniqueKinectId);
+                System.Diagnostics.Debug.Print("Highest intensity on device#: " + audioKinect[maxIntensityDevice].sensor.UniqueKinectId);
                 voiceDetectionArr[maxIntensityDevice]++;
                 if (firstCheck == 0)
                 {
@@ -274,61 +238,11 @@ namespace Microsoft.Samples.Kinect.AudioBasics
                         firstCheck = 2;
                     }
 
-                    //audioKinect[1].sensor.ColorFrameReady -= this.ColorFrameReady;
-                    //count2 = 0;
                     removeAllHandlers(maxIntensityDevice);
                     audioKinect[maxIntensityDevice].sensor.ColorFrameReady += this.ColorFrameReady;
 
                 }
             }
-
-            //if (audioKinect[0].energy[audioKinect[0].energyIndex] > 0.2 && audioKinect[0].energy[audioKinect[0].energyIndex] > audioKinect[1].energy[audioKinect[1].energyIndex])
-            //{
-            //    System.Diagnostics.Debug.Print("more:" + audioKinect[0].sensor.UniqueKinectId);
-            //    //count2--;
-            //    count1++;
-            //    if (firstCheck == 0)
-            //    {
-            //        audioKinect[0].sensor.ColorFrameReady += this.ColorFrameReady;
-            //        firstCheck = 1;
-            //    }
-            //    if (count1 == 3)
-            //    {
-            //        if (firstCheck ==1)
-            //        {   audioKinect[0].sensor.ColorFrameReady -= this.ColorFrameReady;
-            //            firstCheck =2;
-            //        }
-
-            //        audioKinect[1].sensor.ColorFrameReady -=  this.ColorFrameReady;
-            //        count2 = 0;
-            //        audioKinect[0].sensor.ColorFrameReady += this.ColorFrameReady;
-
-            //    }
-            //}
-
-            //if (audioKinect[1].energy[audioKinect[1].energyIndex] > 0.2 && audioKinect[1].energy[audioKinect[1].energyIndex] > audioKinect[0].energy[audioKinect[0].energyIndex])
-            //{
-            //    System.Diagnostics.Debug.Print("more:" + audioKinect[1].sensor.UniqueKinectId);
-            //    //count1--;
-            //    count2++;
-            //    if (firstCheck == 0)
-            //    {
-            //        audioKinect[1].sensor.ColorFrameReady += this.ColorFrameReady;
-            //        firstCheck = 1;
-            //    }
-
-            //    if (count2 == 3)
-            //    {
-            //        if (firstCheck == 1)
-            //        {
-            //            audioKinect[1].sensor.ColorFrameReady -= this.ColorFrameReady;
-            //            firstCheck = 2;
-            //        }
-            //        audioKinect[0].sensor.ColorFrameReady -= this.ColorFrameReady;
-            //        count1 = 0;
-            //        audioKinect[1].sensor.ColorFrameReady += this.ColorFrameReady;
-            //    }
-            //}
 
             // Set width of mark based on confidence.
             // A confidence of 0 would give us a gradient that fills whole area diffusely.
@@ -346,6 +260,11 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             sourceConfidenceText.Text = string.Format(CultureInfo.CurrentCulture, Properties.Resources.SourceConfidence, e.ConfidenceLevel.ToString("0.00", CultureInfo.CurrentCulture));
         }
 
+
+        /// <summary>
+        /// Removes handlers for all Kinects other than the Kinect with the highest intensity sound.
+        /// </summary>
+        /// <param name="deviceNo">The Kinect with the highest intensity sound.</param>
         private void removeAllHandlers(int deviceNo)
         {
             for (int i = 0; i < deviceCount; i++)
@@ -437,7 +356,9 @@ namespace Microsoft.Samples.Kinect.AudioBasics
         }
     }
 
-
+    /// <summary>
+    /// A class to initialize each Kinect sensor. Each object of this class contains a separate thread to compute noise energy readings.
+    /// </summary>
     class InitializeKinect
     {
 
@@ -575,6 +496,9 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             this.readingThread.Start();
         }
 
+        /// <summary>
+        /// Function to uninitialize Kinect sensor of the object.
+        /// </summary>
         public void closeKinect()
         {
             this.reading = false;
@@ -643,5 +567,3 @@ namespace Microsoft.Samples.Kinect.AudioBasics
 
     }
 }
-
-//changes noisefloor value to 4
