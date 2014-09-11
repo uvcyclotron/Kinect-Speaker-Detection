@@ -2,6 +2,8 @@ On-going project at CEERI, Pilani.
 ----------------------------------
 Works with 3 Microsoft Kinect sensors simultaneously, to detect the person speaking.
 
+Include MS Kinect.Toolit and Kinect.Toolkit.Facetracking in the VS Project Solution.
+
 ## Things Done
 
 * <strikethrough> Initialise multiple Kinects and run them concurrently.
