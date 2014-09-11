@@ -4,7 +4,7 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-namespace Microsoft.Samples.Kinect.AudioBasics
+namespace Microsoft.Kinect.SpeakerDetection
 {
     using System;
     using System.Collections.Generic;
@@ -16,7 +16,11 @@ namespace Microsoft.Samples.Kinect.AudioBasics
     using System.Windows.Media;
     using System.Windows.Media.Imaging;
     using Microsoft.Kinect;
-
+    using System.Linq;
+    // following is required for the facetracking part. Uncomment when required.
+    //using Microsoft.Kinect.Toolkit;
+    //using Microsoft.Kinect.Toolkit.FaceTracking;
+    
 
  
     /// <summary>
@@ -29,6 +33,7 @@ namespace Microsoft.Samples.Kinect.AudioBasics
         /// The maximum number of Kinect sensors that can be run parallely in the program.
         /// </summary>
         private const int MaxKinect = 3;
+        private int currentSensorNo;
 
         /// <summary>
         /// Width of bitmap that stores audio stream energy data ready for visualization.
@@ -58,12 +63,20 @@ namespace Microsoft.Samples.Kinect.AudioBasics
         /// </summary>
         private readonly byte[] backgroundPixels = new byte[EnergyBitmapWidth * EnergyBitmapHeight];
 
-       
+        /// <summary>
+        /// Array for FaceTracker obejects.
+        /// We are initializing as many objects as the number of MaxKinects allowed.
+        /// </summary>
+        //private FaceTracker[] facetrackers = new FaceTracker[MaxKinect];
+        //private facetrackerobj;// = new FaceTracker
+
+        //private bool mouthClosed;
+        //private bool mouthOpen;
 
         /// <summary>
         /// AudioKinect objects.
         /// </summary>
-        private InitializeKinect[] audioKinect = new InitializeKinect[2];
+        private InitializeKinect[] audioKinect = new InitializeKinect[MaxKinect];// !MODIFED
 
         /// <summary>
         /// Count of number of AudioKinect objects.
@@ -102,6 +115,9 @@ namespace Microsoft.Samples.Kinect.AudioBasics
         private const int SamplesPerColumn = 40;
         private byte[] colorPixels;
 
+        private byte[] colorPixelData;
+        private short[] depthPixelData;
+        private Skeleton[] skeletonData = new Skeleton[6]; //store upto 6 skeletons each camera
         private WriteableBitmap colorBitmap;
 
         /// <summary>
@@ -154,15 +170,51 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             //add AudioSource Handlers and enable ColourStream for the detected Kinect devices
             for (int j = 0; j < deviceCount; j++)
             {
-
+                //attach handlers for the AudioSource beam angle change event, and source angle change event
                 audioKinect[j].sensor.AudioSource.BeamAngleChanged += this.AudioSourceBeamChanged;
                 audioKinect[j].sensor.AudioSource.SoundSourceAngleChanged += this.AudioSourceSoundSourceAngleChanged;
                 audioKinect[j].sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
+
+               audioKinect[j].sensor.DepthStream.Enable(DepthImageFormat.Resolution80x60Fps30);
+                /*audioKinect[j].sensor.SkeletonStream.Enable(
+                     new TransformSmoothParameters()
+                     {
+                         Correction = 0.5f,
+                         JitterRadius = 0.05f,
+                         MaxDeviationRadius = 0.05f,
+                         Prediction = 0.5f,
+                         Smoothing = 0.5f
+                     });*/
+                //audioKinect[j].sensor.SkeletonStream.Enable();
+               //try
+               //{
+               //    // This will throw on non Kinect For Windows devices.
+               //    //newSensor.DepthStream.Range = DepthRange.Near;
+               //    audioKinect[j].sensor.SkeletonStream.EnableTrackingInNearRange = true;
+
+               //}
+               //catch (InvalidOperationException)
+               //{
+               //    //newSensor.DepthStream.Range = DepthRange.Default;
+               //    audioKinect[j].sensor.SkeletonStream.EnableTrackingInNearRange = false;
+               //}
+
+               //audioKinect[j].sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
+               audioKinect[j].sensor.SkeletonStream.Enable();
+
+                System.Diagnostics.Debug.WriteLine("Handlers attached  and streams enabled " + j);
+                //enable the face tracker
+               // facetrackers[j] = new FaceTracker(audioKinect[j].sensor);
+                //System.Diagnostics.Debug.WriteLine("FaceTracker " + j + " attached");
 
             }
 
             //define byteArraySize
             byteArraySize = this.audioKinect[0].sensor.ColorStream.FramePixelDataLength;
+            //define stream array sizes
+            colorPixelData = new byte[this.audioKinect[0].sensor.ColorStream.FramePixelDataLength];
+            depthPixelData = new short[this.audioKinect[0].sensor.DepthStream.FramePixelDataLength];
+
 
             //0 for now
             this.colorBitmap = new WriteableBitmap(audioKinect[0].sensor.ColorStream.FrameWidth, audioKinect[0].sensor.ColorStream.FrameHeight, 96.0, 96.0, PixelFormats.Bgr32, null);
@@ -205,11 +257,14 @@ namespace Microsoft.Samples.Kinect.AudioBasics
 
         /// <summary>
         /// Handles event triggered when sound source angle changes.
+        /// Assigns the appropriate max Sound intensity camera to the allframe handler.
         /// </summary>
         /// <param name="sender">object sending the event.</param>
         /// <param name="e">event arguments.</param>
         private void AudioSourceSoundSourceAngleChanged(object sender, SoundSourceAngleChangedEventArgs e)
         {
+            //System.Diagnostics.Debug.WriteLine("Entered AudioSource");
+
             // Maximum possible confidence corresponds to this gradient width
             const double MinGradientWidth = 0.04;
             int maxIntensityDevice = 0;
@@ -218,28 +273,42 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             {
                 if (audioKinect[j].energy[audioKinect[j].energyIndex] > audioKinect[maxIntensityDevice].energy[audioKinect[maxIntensityDevice].energyIndex])
                     maxIntensityDevice = j;
+                //System.Diagnostics.Debug.WriteLine("***NEW MAX INTENSITY DEVICE " + j + "***");
             }
 
             // Check if it is above the minimum background noise intensity level.
             if (audioKinect[maxIntensityDevice].energy[audioKinect[maxIntensityDevice].energyIndex] > BackgroundNoiseIntensity)
             {
-                System.Diagnostics.Debug.Print("Highest intensity on device#: " + audioKinect[maxIntensityDevice].sensor.UniqueKinectId);
+                System.Diagnostics.Debug.Print("Highest intensity on device ID#: " + audioKinect[maxIntensityDevice].sensor.UniqueKinectId);
                 voiceDetectionArr[maxIntensityDevice]++;
+                //this runs only once, at program start so the first camera is assigned.
                 if (firstCheck == 0)
                 {
-                    audioKinect[maxIntensityDevice].sensor.ColorFrameReady += this.ColorFrameReady;
+                    //audioKinect[maxIntensityDevice].sensor.ColorFrameReady += this.ColorFrameReady;
+                    audioKinect[maxIntensityDevice].sensor.AllFramesReady += this.AllFrameReadyHandler;
+                    currentSensorNo = maxIntensityDevice;
+                    //the first run is done, state flag is incremented to 1.
                     firstCheck = 1;
                 }
-                if (voiceDetectionArr[maxIntensityDevice] == 3) //this device has recorded highest intensity for this number of continuous frames 
+                //this device has recorded highest intensity for this number of continuous frames : 3
+                if (voiceDetectionArr[maxIntensityDevice] == 3) 
                 {
                     if (firstCheck == 1)
                     {
-                        audioKinect[maxIntensityDevice].sensor.ColorFrameReady -= this.ColorFrameReady;
+                        //audioKinect[maxIntensityDevice].sensor.ColorFrameReady -= this.ColorFrameReady;
+                        audioKinect[maxIntensityDevice].sensor.AllFramesReady -= this.AllFrameReadyHandler;
                         firstCheck = 2;
                     }
-
+                   
+                    //remove handlers for all other devices except this maxIntensityDevice.
                     removeAllHandlers(maxIntensityDevice);
-                    audioKinect[maxIntensityDevice].sensor.ColorFrameReady += this.ColorFrameReady;
+                    //if (currentSensorNo != maxIntensityDevice)
+                     //audioKinect[maxIntensityDevice].sensor.ColorFrameReady += this.ColorFrameReady;
+                    
+                    
+                    audioKinect[maxIntensityDevice].sensor.AllFramesReady += this.AllFrameReadyHandler;
+                    currentSensorNo = maxIntensityDevice;
+                    //voiceDetectionArr[maxIntensityDevice] = 0;
 
                 }
             }
@@ -272,13 +341,128 @@ namespace Microsoft.Samples.Kinect.AudioBasics
                 //remove event handler and reset detection count for all devices other than the device with max intensiy
                 if (i != deviceNo)
                 {
-                    audioKinect[i].sensor.ColorFrameReady -= this.ColorFrameReady;
+                  
+                    try
+                    {
+                        //audioKinect[i].sensor.ColorFrameReady -= this.ColorFrameReady;
+                        audioKinect[i].sensor.AllFramesReady -= this.AllFrameReadyHandler;
+                    }
+                    catch (Exception)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Caught NO FRAME HANDLER EXCEPTION!");
+                    }
                     voiceDetectionArr[i] = 0;
                 }
             }
         }
 
+        /// <summary>
+        /// Handles the color,depth and skeleton streams. 
+        /// Primary function to detect the speakers using mouth movements
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void AllFrameReadyHandler(object sender, AllFramesReadyEventArgs e)
+        {
+            using (ColorImageFrame colorImageFrame = e.OpenColorImageFrame())
+            {
+                //check if non-null before proceeding
+                if (colorImageFrame != null)
+                {
+                    this.colorPixels = new byte[byteArraySize];
 
+                    // Copy the pixel data from the image to a temporary array
+                    colorImageFrame.CopyPixelDataTo(this.colorPixels);
+
+                    // Write the pixel data into our bitmap
+                    this.colorBitmap.WritePixels(
+                        new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight),
+                        this.colorPixels,
+                        this.colorBitmap.PixelWidth * sizeof(int),
+                        0);
+                    //assign the bitmap to the window image
+                    this.Image.Source = this.colorBitmap;
+                }
+            }
+
+            using (DepthImageFrame depthImageFrame = e.OpenDepthImageFrame())
+            {
+                if (depthImageFrame == null)
+                    return;
+                depthImageFrame.CopyPixelDataTo(depthPixelData);
+            }
+
+            using (SkeletonFrame skeletonFrame = e.OpenSkeletonFrame())
+            {
+                if (skeletonFrame == null)
+                    return;
+                skeletonFrame.CopySkeletonDataTo(skeletonData);
+            }
+            
+            //choose the default available skeleton in the stream.
+            //var skeleton = skeletonData.FirstOrDefault(s => s.TrackingState == SkeletonTrackingState.Tracked);
+            //if (skeleton == null)
+            //    return;
+
+           
+            //The Face tracking and moving mouth detection part
+            //initialise the facetracker object.
+            //FaceTrackFrame faceFrame = facetrackers[currentSensorNo].Track(audioKinect[currentSensorNo].sensor.ColorStream.Format, colorPixelData,
+            //                      audioKinect[currentSensorNo].sensor.DepthStream.Format, depthPixelData,
+            //                      skeleton);
+
+            //if (faceFrame.TrackSuccessful)
+            //{
+            //    // Gets the AU coeffs
+            //    var AUCoeff = faceFrame.GetAnimationUnitCoefficients();
+            //    //the values are as follows:
+            //    // -1 <= x <= 0  => mouth is closed
+            //    // 0 < x < 1 => mouth is opening
+            //    // x == 1 => mouth is fully opened
+            //    var jawLowerer = AUCoeff[AnimationUnit.JawLower];
+            //    if (AUCoeff[AnimationUnit.JawLower] <= 0)
+            //    {
+            //        mouthClosed = true;
+            //        mouthOpen = false;
+            //    }
+            //    if (AUCoeff[AnimationUnit.JawLower] > 0)
+            //    {
+            //        mouthOpen = true;
+            //        mouthClosed = false;
+            //    }
+            //    if (mouthOpen && !mouthClosed)
+            //    {
+            //        System.Diagnostics.Debug.WriteLine("Mouth is open " + AUCoeff[AnimationUnit.JawLower]);
+            //    }
+            //    else
+            //    {
+            //        System.Diagnostics.Debug.WriteLine("Mouth is closed " + AUCoeff[AnimationUnit.JawLower]);
+            //    }
+            //     once the open,close seq is working properly, we only need to add a sequence detection for a few frames to determine 
+            //      talking mouth, and then attach the streamhandlers on that device.
+
+                
+            //    /*
+            //    jawLowerer = jawLowerer < 0 ? 0 : jawLowerer;
+            //    MouthScaleTransform.ScaleY = jawLowerer * 5 + 0.1;
+            //    MouthScaleTransform.ScaleX = (AUCoeff[AnimationUnit.LipStretcher] + 1);
+
+                
+            //    // Brows raising
+            //    LeftBrow.Y = RightBrow.Y = (AUCoeff[AnimationUnit.BrowLower]) * 40;
+
+            //    // brows angle
+            //    RightBrowRotate.Angle = (AUCoeff[AnimationUnit.BrowRaiser] * 20);
+            //    LeftBrowRotate.Angle = -RightBrowRotate.Angle;
+
+            //    // Face angle on the Z axis
+            //    CanvasRotate.Angle = faceFrame.Rotation.Z;
+            //     */
+            //}
+
+        }
+
+        //not required, this has been shifted to AllFrameHandler
         private void ColorFrameReady(object sender, ColorImageFrameReadyEventArgs e)
         {
             using (ColorImageFrame colorFrame = e.OpenColorImageFrame())
@@ -346,10 +530,10 @@ namespace Microsoft.Samples.Kinect.AudioBasics
                     // equal to the bitmap height.
                     int barHeight = (int)Math.Max(1.0, (audioKinect[0].energy[(baseIndex + i) % audioKinect[0].energy.Length] * EnergyBitmapHeight));
 
-                    // Center bar vertically on image
+                    // Now center bar vertically on image
                     var barRect = new Int32Rect(i, HalfImageHeight - (barHeight / 2), 1, barHeight);
 
-                    // Draw bar in foreground color
+                    // Draw bar in foreground color as usual.
                     this.energyBitmap.WritePixels(barRect, foregroundPixels, 1, 0);
                 }
             }
@@ -487,7 +671,7 @@ namespace Microsoft.Samples.Kinect.AudioBasics
             }
             
 
-            // Start streaming audio!
+            // Start the audio input stream
             this.audioStream = this.sensor.AudioSource.Start();
             // Use a separate thread for capturing audio because audio stream read operations
             // will block, and we don't want to block main UI thread.

@@ -4,7 +4,7 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
-namespace Microsoft.Samples.Kinect.AudioBasics
+namespace Microsoft.Kinect.SpeakerDetection
 {
     using System.Windows;
 

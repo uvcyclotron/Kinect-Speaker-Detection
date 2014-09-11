@@ -13,8 +13,8 @@ using System.Windows;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Kinect for Windows Developer Toolkit AudioBasics - WPF")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("SpeakerDetection-Kinect")]
+[assembly: AssemblyDescription("Speaker Detection using multiple Kinect sensors")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyTrademark("")]
 
@@ -52,3 +52,4 @@ using System.Windows;
 // [assembly: AssemblyVersion("1.0.*")]
 [assembly: NeutralResourcesLanguageAttribute("en-US")]
 [assembly: CLSCompliant(true)]
+[assembly: AssemblyCompanyAttribute("CEERI")]
